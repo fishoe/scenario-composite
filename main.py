@@ -3,4 +3,4 @@ from api.sample.endpoint import chapter
 
 app = FastAPI()
 
-app.include_router(chapter.router, prefix="/api/v1")
+app.include_router(chapter.router)

@@ -4,9 +4,10 @@ from core import field as field_types
 
 
 class BaseScenario:
-    def __init__(self, fields: list[field_types.BaseField], scenes: list):
-        self.fields = fields
+    def __init__(self, actors: list[field_types.BaseField], scenes: list, effects: list):
+        self.actors = actors
         self.scenes = scenes
+        self.effects = effects
 
 
 class Scenario:
