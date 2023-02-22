@@ -18,6 +18,7 @@ def create_open_api_param_spec(
         name,
         typ,
         position,
+        *,
         required: bool = False,
         default: any = None,
         description: str = None,
@@ -49,8 +50,10 @@ class BaseActorRole:
     def __init__(
             self,
             name: str,
+            *,
             translator: Callable[[str, any], any] = None,
             validator: Callable[[any], Exception | None] = None,
+            **kwargs
     ):
         self.name = name
         self.translators = [translator] if translator else []
@@ -80,25 +83,22 @@ class BaseFieldRole(BaseActorRole):
     def __init__(
             self,
             name: str,
-            typ: Type[any],
+            *,
+            typ: Type[any] = str,
             translator: Callable[[str, any], any] = None,
             validator: Callable[[any], Exception | None] = None,
-            default: any = None,
-            required: bool = False,
             **kwargs
     ):
-        super().__init__(name, translator, validator)
+        super().__init__(name, translator=translator, validator=validator)
         self.type = typ
-        self.default = default or ...
-        self.required = required
         self.field_args = kwargs
 
-    def get_field_spec(self):
-        if self.required:
+    def get_field_spec(self, required: bool = False, default: any = ...):
+        if required:
             typ = self.type
         else:
             typ = self.type | None
-        return self.name, (typ, PydanticField(self.default, **self.field_args))
+        return self.name, (typ, PydanticField(default, **self.field_args))
 
 
 class QueryFieldRole(BaseFieldRole):
@@ -115,23 +115,21 @@ class HeaderFieldRole(BaseActorRole):
             name: str,
             translator: Callable[[str, any], any] = None,
             validator: Callable[[any], Exception | None] = None,
-            default: str = None,
-            required: bool = False,
-            description: str = None,
     ):
-        super().__init__(name, translator, validator)
-        self.default = default
-        self.required = required
-        self.description = description
+        super().__init__(
+            name,
+            translator=translator,
+            validator=validator
+        )
 
-    def get_field_spec(self):
+    def get_field_spec(self, *, default: any = None, required: bool = False, description: str = None):
         return create_open_api_param_spec(
             self.name,
             STRING,
             HEADER,
-            required=self.required,
-            default=self.default,
-            description=self.description,
+            default=default,
+            required=required,
+            description=description,
         )
 
 
@@ -145,7 +143,11 @@ class CookieFieldRole(BaseActorRole):
             required: bool = False,
             description: str = None,
     ):
-        super().__init__(name, translator, validator)
+        super().__init__(
+            name,
+            translator=translator,
+            validator=validator
+        )
         self.default = default
         self.required = required
         self.description = description
@@ -167,7 +169,10 @@ class ModelFieldRole(BaseActorRole):
             name: str,
             translator: Callable[[str, any], any] = None,
     ):
-        super().__init__(name, translator)
+        super().__init__(
+            name,
+            translator=translator,
+        )
 
     def get_field_spec(self):
         return None

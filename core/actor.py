@@ -14,6 +14,9 @@ class BaseActor:
     def get_role(self, role_name: str) -> RoleType | None:
         return self.roles.get(role_name, None)
 
+    def has_role(self, role_name: str) -> bool:
+        return role_name in self.roles
+
 
 class APIActor(BaseActor):
     def __init__(
@@ -23,12 +26,13 @@ class APIActor(BaseActor):
             request_role: Type[RoleType] | None = None,
             model_role: Type[RoleType] | None = None,
             response_role: Type[RoleType] | None = None,
+            *,
             request_name: str = None,
             model_name: str = None,
             response_name: str = None,
             request_typ: Type[any] = None,
             model_typ: Type[any] = None,
-            response_typ: Type[any] = None,
+            response_typ: Type[any] = None
     ):
         super().__init__()
         if name is None and (request_role and model_role):
