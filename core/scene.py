@@ -1,4 +1,3 @@
-from abc import ABCMeta
 from typing import Callable
 
 from core import actor as actor_type
