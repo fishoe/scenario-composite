@@ -1,4 +1,5 @@
-from typing import TypeVar, Type
+from typing import Type
+
 from core import actor_role
 
 RoleType = actor_role.BaseActorRole
@@ -12,7 +13,10 @@ class BaseActor:
         self.roles[role_name] = role
 
     def get_role(self, role_name: str) -> RoleType | None:
-        return self.roles.get(role_name, None)
+        role = self.roles.get(role_name, None)
+        if role is None:
+            raise ValueError(f"role '{role_name}' not found")
+        return role
 
     def has_role(self, role_name: str) -> bool:
         return role_name in self.roles
@@ -65,15 +69,7 @@ class APIActor(BaseActor):
         self.set_role("model", model_role_inst)
         self.set_role("response", response_role_inst)
 
-    @property
-    def get_request_role(self) -> RoleType | None:
-        return self.get_role("request")
-
-    @property
-    def get_response_role(self) -> RoleType | None:
-        return self.get_role("response")
-
-    @property
-    def get_model_role(self) -> RoleType | None:
-        return self.get_role("model")
-
+    def get_role(self, role_name: str) -> RoleType | None:
+        if role_name not in ("request", "model", "response"):
+            raise ValueError("role_name must be one of 'request', 'model', 'response'")
+        return self.roles.get(role_name, None)

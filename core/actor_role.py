@@ -75,7 +75,7 @@ class BaseActorRole:
         if self.validator:
             return self.validator(value)
 
-    def get_field_spec(self):
+    def get_field_spec(self, **kwargs):
         raise NotImplementedError
 
 
@@ -93,7 +93,7 @@ class BaseFieldRole(BaseActorRole):
         self.type = typ
         self.field_args = kwargs
 
-    def get_field_spec(self, required: bool = False, default: any = ...):
+    def get_field_spec(self, required: bool = False, default: any = ..., **kwargs):
         if required:
             typ = self.type
         else:
@@ -115,14 +115,16 @@ class HeaderFieldRole(BaseActorRole):
             name: str,
             translator: Callable[[str, any], any] = None,
             validator: Callable[[any], Exception | None] = None,
+            **kwargs
     ):
         super().__init__(
             name,
             translator=translator,
-            validator=validator
+            validator=validator,
+            **kwargs
         )
 
-    def get_field_spec(self, *, default: any = None, required: bool = False, description: str = None):
+    def get_field_spec(self, *, default: any = None, required: bool = False, description: str = None, **kwargs):
         return create_open_api_param_spec(
             self.name,
             STRING,
@@ -139,27 +141,23 @@ class CookieFieldRole(BaseActorRole):
             name: str,
             translator: Callable[[str, any], any] = None,
             validator: Callable[[any], Exception | None] = None,
-            default: str = None,
-            required: bool = False,
-            description: str = None,
+            **kwargs
     ):
         super().__init__(
             name,
             translator=translator,
-            validator=validator
+            validator=validator,
+            **kwargs
         )
-        self.default = default
-        self.required = required
-        self.description = description
 
-    def get_field_spec(self):
+    def get_field_spec(self, default: any = None, required: bool = False, description: str = None, **kwargs):
         return create_open_api_param_spec(
             self.name,
             STRING,
             COOKIE,
-            required=self.required,
-            default=self.default,
-            description=self.description,
+            required=required,
+            default=default,
+            description=description,
         )
 
 
@@ -174,5 +172,5 @@ class ModelFieldRole(BaseActorRole):
             translator=translator,
         )
 
-    def get_field_spec(self):
+    def get_field_spec(self, **kwargs):
         return None

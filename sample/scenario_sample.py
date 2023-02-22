@@ -1,6 +1,5 @@
-from typing import Callable
-
 from core import actor_role, actor, scene
+from core.scenario import Scenario
 
 JSON_ROLE = actor_role.JsonFieldRole
 MODEL_ROLE = actor_role.ModelFieldRole
@@ -10,19 +9,6 @@ ReadScene = scene.DetailScene
 CreateScene = scene.CreateScene
 UpdateScene = scene.UpdateScene
 DeleteScene = scene.DeleteScene
-
-
-class Scenario:
-    def __init__(self, scenes: dict, actors: dict[str, any] = None):
-        self.scenes = scenes or {}
-        self.actors = actors or {}
-
-    def __call__(self, scene_name, data, req):
-        _scene = self.scenes.get(scene_name, None)
-        if _scene:
-            return _scene(self.actors, data, req, {})
-        return
-
 
 db = [
     {"id": 1, "name": "John", "age": 20, "address": "123 Main St", "is_deleted": False},
@@ -44,7 +30,7 @@ scenario = Scenario(
     scenes={
         "create": CreateScene(Cast({"name", "age", "address"})),
         "read": ReadScene(Cast({"id", "name", "age", "address"})),
-        "update": UpdateScene(Cast({"name", "age", "address"})),
+        "update": UpdateScene(Cast(set(),)),
         "delete": DeleteScene(Cast({"deleted"})),
     },
 )

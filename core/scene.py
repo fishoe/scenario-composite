@@ -1,11 +1,24 @@
+from abc import ABCMeta
 from typing import Callable
 
-from core import actor_role as role
 from core import actor as actor_type
+from core import actor_role
 
 ACTOR_TYPE = actor_type.BaseActor
-ROLE_TYPE = role.BaseActorRole
+ACTOR_MAP = dict[str, ACTOR_TYPE]
+ROLE_TYPE = actor_role.BaseActorRole
+ROLE_MAP = dict[str, ROLE_TYPE]
 SCENE_LAMBDA = Callable[[list[ROLE_TYPE], list[ROLE_TYPE], any, dict[str, any], dict[str, any]], any]
+
+HEADER_ROLE = actor_role.HeaderFieldRole
+COOKIE_ROLE = actor_role.CookieFieldRole
+QUERY_ROLE = actor_role.QueryFieldRole
+JSON_ROLE = actor_role.JsonFieldRole
+
+HEADER = "header"
+COOKIE = "cookie"
+QUERY = "query"
+JSON = "json"
 
 
 def apply_update_to_obj(obj, field_name, update):
@@ -14,6 +27,20 @@ def apply_update_to_obj(obj, field_name, update):
     else:
         setattr(obj, field_name, update)
     return obj
+
+
+def classify_role(role: ROLE_TYPE, **kwargs) -> tuple[str, any]:
+    if isinstance(role, HEADER_ROLE):
+        name, field_spec = HEADER, role.get_field_spec(**kwargs)
+    elif isinstance(role, COOKIE_ROLE):
+        name, field_spec = COOKIE, role.get_field_spec(**kwargs)
+    elif isinstance(role, QUERY_ROLE):
+        name, field_spec = QUERY, role.get_field_spec(**kwargs)
+    elif isinstance(role, JSON_ROLE):
+        name, field_spec = JSON, role.get_field_spec(**kwargs)
+    else:
+        raise ValueError(f"Unknown role type: {role}")
+    return name, field_spec
 
 
 class Cast:
@@ -45,9 +72,7 @@ class Cast:
         self.optional = optional
         self.excluded = excluded
 
-    def __call__(
-            self, actors: dict[str, ACTOR_TYPE]
-    ) -> tuple[list[ACTOR_TYPE], list[ACTOR_TYPE]]:
+    def __call__(self, actors: ACTOR_MAP) -> tuple[ACTOR_MAP, ACTOR_MAP]:
         actors = self._exclude_actors(actors)
         if self.required == '*':
             optional, required = self._get_cast_actors('optional', actors)
@@ -56,11 +81,11 @@ class Cast:
         else:
             required, _ = self._get_cast_actors('required', actors)
             optional, _ = self._get_cast_actors('optional', actors)
-        return list(required.values()), list(optional.values())
+        return required, optional
 
     def _get_cast_actors(
-            self, position: str, actors: dict[str, ACTOR_TYPE]
-    ) -> tuple[dict[str, ACTOR_TYPE], dict[str, ACTOR_TYPE]]:
+            self, position: str, actors: ACTOR_MAP
+    ) -> tuple[ACTOR_MAP, ACTOR_MAP]:
         position_actor_names = getattr(self, position)
         selected, not_selected = {}, {}
         for actor_name, actor in actors.items():
@@ -70,11 +95,16 @@ class Cast:
                 not_selected[actor_name] = actor
         return selected, not_selected
 
-    def _exclude_actors(self, actors: dict[str, ACTOR_TYPE]) -> dict[str, ACTOR_TYPE]:
+    def _exclude_actors(self, actors: ACTOR_MAP) -> ACTOR_MAP:
         if self.excluded:
             return {k: v for k, v in actors.items() if k not in self.excluded}
         else:
             return actors
+
+
+def get_actor_role_by_role_name(role_name: str, actors: ACTOR_MAP) -> ROLE_MAP:
+    return {actor_name: actor.get_role(role_name) for actor_name, actor in actors.items()
+            if actor.has_role(role_name)}
 
 
 class BaseScene:
@@ -83,53 +113,84 @@ class BaseScene:
         self.cast = cast
         self.func = func
 
-    def on_stage(self, actors):
+    def on_stage(self, actors: ACTOR_MAP):
         return self.cast(actors)
 
-    def get_actor_role(self, actors: list[ACTOR_TYPE]):
+    def get_actor_role(self, actors: ACTOR_MAP) -> ROLE_MAP:
         role_name = self.role_name
-        return [actor.get_role(role_name) for actor in actors if actor.has_role(role_name)]
+        return get_actor_role_by_role_name(role_name, actors)
 
-    def __call__(self, actors, data, req, extra):
+    def __call__(self, actors: ACTOR_MAP, data: any, req: any, extra: any):
         if self.func is None:
             raise NotImplementedError("func must be implemented")
         main_actors, sub_actors = self.on_stage(actors)
         main_roles = self.get_actor_role(main_actors)
         sub_roles = self.get_actor_role(sub_actors)
-        return self.func(main_roles, sub_roles, data, req, extra)
+        return self.func([*main_roles.values()], [*sub_roles.values()], data, req, extra)
 
 
-class SummaryScene(BaseScene):
+class BaseAPIScene(BaseScene):
+    def __init__(self, role_name: str, cast: Cast, func: SCENE_LAMBDA = None):
+        super().__init__(role_name, cast, func)
+
+    def get_api_spec(self, actors: ACTOR_MAP, **kwargs) -> dict[str, list[any]]:
+        main_actors, sub_actors = self.on_stage(actors)
+        if self.role_name == "model":
+            main_roles = get_actor_role_by_role_name("response", main_actors)
+            sub_roles = get_actor_role_by_role_name("response", sub_actors)
+        else:
+            main_roles = self.get_actor_role(main_actors)
+            sub_roles = self.get_actor_role(sub_actors)
+        api_field_specs = {
+            HEADER: [],
+            COOKIE: [],
+            QUERY: [],
+            JSON: [],
+        }
+        for role_name, main_role in main_roles.items():
+            docs_args = kwargs.get(role_name, {})
+            name, field_spec = classify_role(main_role, **docs_args)
+            api_field_specs[name].append(main_role.get_field_spec(required=True, **docs_args))
+
+        for role_name, sub_role in sub_roles.items():
+            docs_args = kwargs.get(role_name, {})
+            name, field_spec = classify_role(sub_role, **docs_args)
+            api_field_specs[name].append(sub_role.get_field_spec(required=False, **docs_args))
+
+        return api_field_specs
+
+
+class SummaryScene(BaseAPIScene):
     def __init__(self, cast: Cast):
         super().__init__("model", cast)
 
         def summary(main_roles: list[ROLE_TYPE], sub_roles: list[ROLE_TYPE], data: any, req: dict, extra: dict):
             result = {}
-            for actor_role in main_roles:
-                value = actor_role.get_value(data)
-                k, v = actor_role.translate(value)
+            for role in main_roles:
+                value = role.get_value(data)
+                k, v = role.translate(value)
                 result[k] = v
             return result
 
         self.func = summary
 
 
-class DetailScene(BaseScene):
+class DetailScene(BaseAPIScene):
     def __init__(self, cast: Cast):
         super().__init__("model", cast)
 
         def detail(main_roles: list[ROLE_TYPE], sub_roles: list[ROLE_TYPE], data: any, req: dict, extra: dict):
             result = {}
-            for actor_role in main_roles + sub_roles:
-                value = actor_role.get_value(data)
-                k, v = actor_role.translate(value)
+            for role in main_roles + sub_roles:
+                value = role.get_value(data)
+                k, v = role.translate(value)
                 result[k] = v
             return result
 
         self.func = detail
 
 
-class CreateScene(BaseScene):
+class CreateScene(BaseAPIScene):
     def __init__(self, cast: Cast):
         super().__init__("request", cast)
 
@@ -137,12 +198,12 @@ class CreateScene(BaseScene):
             create_content = {}
             exceptions = []
 
-            for actor_role in main_roles + sub_roles:
-                if actor_role.name not in req:
+            for role in main_roles + sub_roles:
+                if role.name not in req:
                     continue
-                value = actor_role.get_value(req)
-                k, v = actor_role.translate(value)
-                exception = actor_role.validate(v)
+                value = role.get_value(req)
+                k, v = role.translate(value)
+                exception = role.validate(v)
                 if exception:
                     exceptions.append(exception)
                 create_content[k] = v
@@ -156,20 +217,20 @@ class CreateScene(BaseScene):
         self.func = create
 
 
-class UpdateScene(BaseScene):
+class UpdateScene(BaseAPIScene):
     def __init__(self, cast: Cast):
         super().__init__("request", cast)
 
-        def update(main_roles: list[ROLE_TYPE], sub_roles: list[ROLE_TYPE], data: any, req: dict, extra: dict):
+        def update(main_roles: list[ROLE_TYPE], sub_roles: list[ROLE_TYPE], data: any, request: dict, extra: dict):
             update_content = {}
             exceptions = []
 
-            for actor_role in main_roles + sub_roles:
-                if actor_role.name not in req:
+            for role in main_roles + sub_roles:
+                if role.name not in request:
                     continue
-                value = actor_role.get_value(req)
-                k, v = actor_role.translate(value)
-                exception = actor_role.validate(v)
+                value = role.get_value(request)
+                k, v = role.translate(value)
+                exception = role.validate(v)
                 if exception:
                     exceptions.append(exception)
                 update_content[k] = v
@@ -184,7 +245,7 @@ class UpdateScene(BaseScene):
         self.func = update
 
 
-class DeleteScene(BaseScene):
+class DeleteScene(BaseAPIScene):
     def __init__(self, cast: Cast):
         super().__init__("model", cast)
 
