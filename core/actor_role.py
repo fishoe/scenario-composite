@@ -1,4 +1,4 @@
-from typing import Callable, Type
+from typing import Callable, Type, Optional
 
 from pydantic import Field as PydanticField
 
@@ -93,11 +93,12 @@ class BaseFieldRole(BaseActorRole):
         self.type = typ
         self.field_args = kwargs
 
-    def get_field_spec(self, required: bool = False, default: any = ..., **kwargs):
+    def get_field_spec(self, required: bool = False, default: any = None, **kwargs):
         if required:
             typ = self.type
+            default = ... if default is None else default
         else:
-            typ = self.type | None
+            typ = Optional[self.type]
         return self.name, (typ, PydanticField(default, **self.field_args))
 
 

@@ -1,12 +1,15 @@
 import inspect
 from types import FunctionType
-from typing import TypeVar, Type
+from typing import TypeVar, Type, Optional
 
-from fastapi import FastAPI, Depends, Header, Cookie, Request
-from pydantic import BaseModel, Field
+from fastapi import FastAPI, Depends, Header, Cookie, Request, Body
+from pydantic import BaseModel, Field, create_model
+from core.helper import db_helper
 
+from sample.models import sample
+
+DB_HELPER = db_helper.DBHelper
 app = FastAPI()
-
 
 # class Foo:
 #     def __init__(self, a: str, b: str):
@@ -28,6 +31,8 @@ app = FastAPI()
 # print(delegate(Foo, 5, 6))
 
 
+_m = create_model("Foo", a=(str, Field(None)), b=((Optional[str] | None), Field(None)))
+
 @app.get("/my-endpoint", openapi_extra={
     "parameters":
         [
@@ -36,10 +41,9 @@ app = FastAPI()
         ]})
 async def my_endpoint(
         request: Request,
+        t: _m = Body(),
         coobase: str = Cookie("drive"),
 ):
-    print(request.headers)
-    print(request.cookies)
     cookie = request.cookies.get("X-My-Cookie")
     header = request.headers.get("X-My-Header")
     return {"cookie": coobase, "header": header}
@@ -60,7 +64,6 @@ CreateScene = scene.CreateScene
 UpdateScene = scene.UpdateScene
 DeleteScene = scene.DeleteScene
 
-
 foo = API_SCENARIO(
     actors={
         "id": API_ACTOR("id", int, JSON_ROLE, MODEL_ROLE, JSON_ROLE),
@@ -71,15 +74,15 @@ foo = API_SCENARIO(
     },
     scenes={
         "summary": SummaryScene(Cast({"id", "name"})),
-        "create": CreateScene(Cast({"name", "age"})),
+        "create": CreateScene(Cast({"name", "age", "address"})),
         "detail": DetailScene(Cast({"id", "name", "age", "address"})),
         "update": UpdateScene(Cast(None, "*", {"id", "deleted"}, )),
         "delete": DeleteScene(Cast({"deleted"})),
     })
 
-
 chapter = chapter.APIChapter(
     "test",
+    DB_HELPER(sample.User),
     scenarios=[foo]
 )
 

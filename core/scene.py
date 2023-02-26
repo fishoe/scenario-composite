@@ -134,7 +134,7 @@ class BaseAPIScene(BaseScene):
 
     def get_api_spec(self, actors: ACTOR_MAP, **kwargs) -> dict[str, list[any]]:
         main_actors, sub_actors = self.on_stage(actors)
-        if self.role_name == "model":
+        if self.role_name == "models":
             main_roles = get_actor_role_by_role_name("response", main_actors)
             sub_roles = get_actor_role_by_role_name("response", sub_actors)
         else:
@@ -161,7 +161,7 @@ class BaseAPIScene(BaseScene):
 
 class SummaryScene(BaseAPIScene):
     def __init__(self, cast: Cast):
-        super().__init__("model", cast)
+        super().__init__("models", cast)
 
         def summary(main_roles: list[ROLE_TYPE], sub_roles: list[ROLE_TYPE], data: any, req: dict, extra: dict):
             result = {}
@@ -176,7 +176,7 @@ class SummaryScene(BaseAPIScene):
 
 class DetailScene(BaseAPIScene):
     def __init__(self, cast: Cast):
-        super().__init__("model", cast)
+        super().__init__("models", cast)
 
         def detail(main_roles: list[ROLE_TYPE], sub_roles: list[ROLE_TYPE], data: any, req: dict, extra: dict):
             result = {}
@@ -246,7 +246,7 @@ class UpdateScene(BaseAPIScene):
 
 class DeleteScene(BaseAPIScene):
     def __init__(self, cast: Cast):
-        super().__init__("model", cast)
+        super().__init__("models", cast)
 
         def delete(main_roles: list[ROLE_TYPE], sub_roles: list[ROLE_TYPE], data: any, req: dict, extra: dict):
             if len(main_roles) > 1:

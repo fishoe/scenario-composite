@@ -22,8 +22,8 @@ def set_attribute(obj, field_name, value):
 
 def get_next_role(role_name):
     if role_name == "request":
-        return "model"
-    elif role_name == "model":
+        return "models"
+    elif role_name == "models":
         return "response"
     else:
         return None
@@ -76,7 +76,7 @@ class APIScenario(Scenario):
         self.scenes = scenes
         self.path = {
             'request': request_path,
-            'model': model_path,
+            'models': model_path,
             'response': response_path or request_path,
         }
 
@@ -98,20 +98,20 @@ class APIScenario(Scenario):
         return self._extract_data('request', data)
 
     def extract_from_model(self, data):
-        return self._extract_data('model', data)
+        return self._extract_data('models', data)
 
     def inject_to_response(self, response, data):
         return self._inject_data('response', response, data)
 
     def inject_to_model(self, model, data):
-        return self._inject_data('model', model, data)
+        return self._inject_data('models', model, data)
 
     def get_api_spec(self, scene_name):
         try:
             _scene = self.scenes[scene_name]
         except KeyError:
             raise ValueError(f"'{scene_name}' is not in scenario scenes")
-        role_name = _scene.role_name if _scene.role_name == "model" else "response"
+        role_name = _scene.role_name if _scene.role_name == "models" else "response"
         return self.path[role_name], _scene.get_api_spec(self.actors)
 
 
@@ -121,5 +121,5 @@ class APIListScenario(APIScenario):
             _scene = self.scenes[scene_name]
         except KeyError:
             raise ValueError(f"'{scene_name}' is not in scenario scenes")
-        role_name = _scene.role_name if _scene.role_name == "model" else "response"
+        role_name = _scene.role_name if _scene.role_name == "models" else "response"
         return [self.path[role_name], _scene.get_api_spec(self.actors)]

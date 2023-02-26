@@ -1,14 +1,20 @@
 from fastapi import APIRouter, Depends, Request
-from starlette.responses import Response
+from sqlalchemy.orm import Session
 
 from core import scenario
+from core.depends import depends
 from core.request import pageable
 from core.response import catalog
 from core.helper.schema_helper import HeaderAndCookieSchemaHelper, QuerySchemaHelper, JsonSchemaHelper
+from core.helper import db_helper
+
+DB_HELPER = db_helper.DBHelper
 
 CATALOG_RESPONSE = catalog.CatalogResponse
 PAGEABLE_REQUEST = pageable.QueryPageParams
 API_SCENARIO = scenario.APIScenario
+
+GET_DB = depends.get_db
 
 
 def extract_field_from_dict_obj(obj, field_names: list, defaults=None):
@@ -30,10 +36,12 @@ class APIChapter:
     def __init__(
             self,
             prefix: str,
+            connector: DB_HELPER,
             scenarios: list[API_SCENARIO]
     ):
         self.name = prefix
         self.prefix = "/" + prefix
+        self.connector = connector
         self.scenarios = scenarios
         self.api_docs = {}
 
@@ -88,6 +96,13 @@ class APIChapter:
         cookie = self.api_docs.get(scene_name, {}).get("cookie", [])
         return json, query, header, cookie
 
+    def _get_detail(self, result):
+        detail = {}
+        for _scenario in self.scenarios:
+            value = _scenario("detail", result, {}, {})
+            detail = _scenario.inject_to_response(detail, value)
+        return detail
+
     def _add_catalog_endpoint(self, router: APIRouter):
         if self.api_docs.get("summary", None) is None:
             self.docs()
@@ -97,6 +112,7 @@ class APIChapter:
         def _catalog(
                 request: Request,
                 page_param=Depends(PAGEABLE_REQUEST),
+                db: Session = Depends(GET_DB),
                 query_param=Depends(query),
         ):
             header_param = self._get_header_field(request, "summary")
@@ -104,9 +120,17 @@ class APIChapter:
 
             offset, limit = page_param.get_offset_and_limit()
 
-            # logic here
+            entities, total = self.connector.find_and_count(db, offset, limit)
+            summaries = []
 
-            return {}
+            for entity in entities:
+                summary = {}
+                for _scenario in self.scenarios:
+                    value = _scenario("summary", entity, {}, {})
+                    summary = _scenario.inject_to_response(summary, value)
+                summaries.append(summary)
+
+            return CATALOG_RESPONSE[json](summaries=summaries, total=total, length=len(summaries))
 
         router.add_api_route(
             "",
@@ -121,19 +145,24 @@ class APIChapter:
 
         json, query, header, cookie = self._get_docs_type("detail")
 
-        def detail(
+        def _detail(
                 item_id: int,
                 request: Request,
+                db: Session = Depends(GET_DB),
                 query_param=Depends(query),
         ):
             header_param = self._get_header_field(request, "detail")
             cookie_param = self._get_cookie_field(request, "detail")
 
-            return Response()
+            entity = self.connector.get(db, item_id)
+
+            detail = self._get_detail(entity)
+
+            return detail
 
         router.add_api_route(
             "/{item_id}",
-            endpoint=detail,
+            endpoint=_detail,
             methods=["GET"],
             response_model=json
         )
@@ -147,13 +176,24 @@ class APIChapter:
 
         def create(
                 request: Request,
-                json_param=Depends(json),
+                json_param: json,
+                db: Session = Depends(GET_DB),
                 query_param=Depends(query),
         ):
             header_param = self._get_header_field(request, "create")
             cookie_param = self._get_cookie_field(request, "create")
 
-            return Response()
+            entity = self.connector.create_entity()
+            result = None
+            for _scenario in self.scenarios:
+                value = _scenario("create", entity, json_param.dict(), {})
+                if value is not None:
+                    result = value
+
+            self.connector.apply_commit_refresh(db, result)
+            detail = self._get_detail(result)
+
+            return detail
 
         router.add_api_route(
             "",
@@ -169,20 +209,32 @@ class APIChapter:
         json, query, header, cookie = self._get_docs_type("update")
         response_model = self.api_docs.get("detail", {}).get("json", {})
 
-        def update(
+        def _update(
                 item_id: int,
                 request: Request,
-                json_param=Depends(json),
+                json_param: json,
+                db: Session = Depends(GET_DB),
                 query_param=Depends(query),
         ):
             header_param = self._get_header_field(request, "update")
             cookie_param = self._get_cookie_field(request, "update")
 
-            return Response()
+            entity = self.connector.get(db, item_id)
+
+            result = None
+            for _scenario in self.scenarios:
+                value = _scenario("update", entity, json_param.dict(exclude_none=True), {})
+                if value is not None:
+                    result = value
+
+            self.connector.apply_commit_refresh(db, result)
+            detail = self._get_detail(result)
+
+            return detail
 
         router.add_api_route(
             "/{item_id}",
-            endpoint=update,
+            endpoint=_update,
             methods=["PUT"],
             response_model=response_model
         )
@@ -192,22 +244,35 @@ class APIChapter:
             self.docs()
 
         json, query, header, cookie = self._get_docs_type("delete")
+        detail_json = self.api_docs.get("detail", {}).get("json", {})
 
         def delete(
                 item_id: int,
                 request: Request,
+                db: Session = Depends(GET_DB),
                 query_param=Depends(query),
         ):
             header_param = self._get_header_field(request, "delete")
             cookie_param = self._get_cookie_field(request, "delete")
 
-            return Response()
+            entity = self.connector.get(db, item_id)
+
+            result = None
+            for _scenario in self.scenarios:
+                temp = _scenario("delete", entity, {}, {})
+                if temp is not None:
+                    result = temp
+
+            self.connector.apply_commit_refresh(db, result)
+            detail = self._get_detail(result)
+
+            return detail
 
         router.add_api_route(
             "/{item_id}",
             endpoint=delete,
             methods=["DELETE"],
-            response_model=json
+            response_model=detail_json
         )
 
     @property
