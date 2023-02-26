@@ -20,6 +20,15 @@ def set_attribute(obj, field_name, value):
     return obj
 
 
+def get_next_role(role_name):
+    if role_name == "request":
+        return "model"
+    elif role_name == "model":
+        return "response"
+    else:
+        return None
+
+
 class Scenario:
     def __init__(
             self,
@@ -35,10 +44,20 @@ class Scenario:
     def _inject_data(self, position, obj, data):
         raise NotImplementedError
 
-    def __call__(self, scene_name, data, req):
+    def _call_scene(self, scene_inst, data, req, extra):
+        if isinstance(data, list):
+            return [scene_inst(self.actors, d, req, extra) for d in data]
+        else:
+            return scene_inst(self.actors, data, req, extra)
+
+    def has_scene(self, scene_name):
+        return scene_name in self.scenes
+
+    def __call__(self, scene_name, data, req, extra):
         _scene = self.scenes.get(scene_name, None)
         if _scene:
-            return _scene(self.actors, data, req, {})
+            scenario_value = self._extract_data(_scene.role_name, data)
+            return self._call_scene(_scene, scenario_value, req, extra)
         return
 
 
@@ -68,10 +87,12 @@ class APIScenario(Scenario):
         return data
 
     def _inject_data(self, position, obj, data):
-        path = getattr(self, position, None)
+        path = self.path.get(position, None)
         if path:
             return set_attribute(obj, path, data)
-        return data
+        for k, v in data.items():
+            set_attribute(obj, k, v)
+        return obj
 
     def extract_from_request(self, data):
         return self._extract_data('request', data)
@@ -90,4 +111,15 @@ class APIScenario(Scenario):
             _scene = self.scenes[scene_name]
         except KeyError:
             raise ValueError(f"'{scene_name}' is not in scenario scenes")
-        return _scene.get_api_spec(self.actors)
+        role_name = _scene.role_name if _scene.role_name == "model" else "response"
+        return self.path[role_name], _scene.get_api_spec(self.actors)
+
+
+class APIListScenario(APIScenario):
+    def get_api_spec(self, scene_name):
+        try:
+            _scene = self.scenes[scene_name]
+        except KeyError:
+            raise ValueError(f"'{scene_name}' is not in scenario scenes")
+        role_name = _scene.role_name if _scene.role_name == "model" else "response"
+        return [self.path[role_name], _scene.get_api_spec(self.actors)]

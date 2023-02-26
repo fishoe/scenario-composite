@@ -249,8 +249,10 @@ class DeleteScene(BaseAPIScene):
         super().__init__("model", cast)
 
         def delete(main_roles: list[ROLE_TYPE], sub_roles: list[ROLE_TYPE], data: any, req: dict, extra: dict):
-            if len(main_roles) != 1:
-                raise ValueError("main_roles must be one in delete scene")
+            if len(main_roles) > 1:
+                raise ValueError("main role must be one")
+            if not main_roles:
+                return data
             main_role = main_roles[0]
             apply_update_to_obj(data, main_role.name, True)
             return data
