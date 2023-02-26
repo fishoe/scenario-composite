@@ -8,11 +8,11 @@ class DBHelper:
     def __init__(self, model: Type[any]):
         self.model = model
 
-    def get(self, db: Session, entity_id, allow_deleted: bool = False):
+    def get(self, db: Session, entity_id, allow_deleted: bool = False, deleted_key: str = "is_deleted"):
         entity = db.query(self.model).get(entity_id)
         if entity is None:
             raise HTTPException(status_code=404, detail="Entity not found")
-        elif hasattr(entity, "is_deleted") and not allow_deleted and entity.is_deleted:
+        elif hasattr(entity, deleted_key) and not allow_deleted and entity.is_deleted:
             raise HTTPException(status_code=404, detail="Entity not found")
         return entity
 
