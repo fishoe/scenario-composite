@@ -86,130 +86,42 @@ bar = API_SCENARIO(
 )
 
 
-class APIChapterMock:
-    def __init__(self, scenarios: list[API_SCENARIO]):
-        self.scenarios = scenarios
-        self.api_docs = {}
-
-    def catalog(self, items):
-        # get items from db
-        metadata = {}
-        catalog = []
-        for item in items:
-            result = {}
-            for _scenario in self.scenarios:
-                value = _scenario("summary", item, {}, {})
-                result = _scenario.inject_to_response(result, value)
-            catalog.append(result)
-        return catalog
-
-    def detail(self, item):
-        # get item from db
-        result = {}
-        for _scenario in self.scenarios:
-            value = _scenario("detail", item, {}, {})
-            result = _scenario.inject_to_response(result, value)
-        return result
-
-    def create(self, data):
-        # create item in db
-        item = {}
-        result = None
-        for _scenario in self.scenarios:
-            value = _scenario("create", item, data, {})
-            if value is not None:
-                result = value
-        return result
-
-    def update(self, item, data):
-        # update item in db
-        result = {}
-        for _scenario in self.scenarios:
-            value = _scenario("update", item, data, {})
-            if value is not None:
-                result = value
-        return result
-
-    def delete(self, item):
-        # delete item in db
-        result = {}
-        for _scenario in self.scenarios:
-            temp = _scenario("delete", item, {}, {})
-            if temp is not None:
-                result = temp
-        return result
-
-    def docs(self):
-        for i in ["summary", "detail", "create", "update", "delete"]:
-            header_schema = HeaderAndCookieSchemaHelper()
-            cookie_schema = HeaderAndCookieSchemaHelper()
-            query_schema = QuerySchemaHelper()
-            json_schema = JsonSchemaHelper()
-            for _scenario in self.scenarios:
-                if _scenario.has_scene(i):
-                    scenario_api_spec = _scenario.get_api_spec(i)
-                    name, spec = scenario_api_spec
-                    header_schema.add_fields(spec.get("header", []))
-                    cookie_schema.add_fields(spec.get("cookie", []))
-                    query_schema.add_fields(spec.get("query", []))
-                    if name is None:
-                        json_schema.add_fields(spec.get("json", []))
-                    elif isinstance(scenario_api_spec, list):
-                        json_schema.add_nested_list_schema(name, spec.get("json", []))
-                    else:
-                        json_schema.add_nested_schema(name, spec.get("json", []))
-            docs = {
-                "header": header_schema.get_schemas(f"{i}_header"),
-                "cookie": cookie_schema.get_schemas(f"{i}_cookie"),
-                "query": query_schema.get_schemas(f"{i}_query"),
-                "json": json_schema.get_schemas(f"{i}_json"),
-            }
-
-
-chapter1 = APIChapterMock(
-    [foo]
-)
-
-chapter2 = APIChapterMock(
-    [foo, bar]
-)
-
-catalog = chapter1.catalog(db[:])
-print("catalog: ")
-for i in catalog:
-    print(i)
-print()
-
-detail = chapter1.detail(db[0])
-print("detail: ", detail)
-print()
-
-detail2 = chapter2.detail(db[0])
-print("detail2: ", detail2)
-print()
-
-create = chapter1.create({
-    "name": "John",
-    "age": 20,
-    "address": "kj kj",
-})
-db_add(create)
-idx = 3
-update = chapter1.update(db[idx], {
-    "id": 7,
-    "name": "pipi",
-    "age": 5,
-})
-print("update: ", update)
-db_update(idx, update)
-
-delete = chapter1.delete(db[0])
-db[0] = delete
-
-for record in db:
-    if "is_deleted" not in record or not record["is_deleted"]:
-        print(record)
-
-print()
+# catalog = chapter1.catalog(db[:])
+# print("catalog: ")
+# for i in catalog:
+#     print(i)
+# print()
+#
+# detail = chapter1.detail(db[0])
+# print("detail: ", detail)
+# print()
+#
+# detail2 = chapter2.detail(db[0])
+# print("detail2: ", detail2)
+# print()
+#
+# create = chapter1.create({
+#     "name": "John",
+#     "age": 20,
+#     "address": "kj kj",
+# })
+# db_add(create)
+# idx = 3
+# update = chapter1.update(db[idx], {
+#     "id": 7,
+#     "name": "pipi",
+#     "age": 5,
+# })
+# print("update: ", update)
+# db_update(idx, update)
+#
+# delete = chapter1.delete(db[0])
+# db[0] = delete
+#
+# for record in db:
+#     if "is_deleted" not in record or not record["is_deleted"]:
+#         print(record)
+#
+# print()
 # chapter1.docs()
 

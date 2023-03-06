@@ -35,11 +35,11 @@ scenario = Scenario(
     },
 )
 
-a = scenario("read", db[0], {})
+a = scenario("read", db[0], {},{})
 item = scenario("create", {}, {
     "name": "Jully",
     "age": 30
-})
+},{})
 # scenario calls read scene
 print(a)
 
@@ -50,9 +50,9 @@ db.append(item)
 scenario("update", db[0], {
     "name": "Jake",
     "age": 37
-})
+},{})
 
-b = scenario("delete", db[4], {})
+b = scenario("delete", db[4], {},{})
 db[4] = b
 
 
